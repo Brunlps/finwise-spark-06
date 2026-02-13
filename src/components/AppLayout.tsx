@@ -1,10 +1,10 @@
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  LayoutDashboard, Receipt, Upload, Settings, BarChart3, LogOut, DollarSign, Menu, X
+  LayoutDashboard, Receipt, Upload, Settings, BarChart3, LogOut, DollarSign, Menu, X, Moon, Sun
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -19,6 +19,12 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }, [dark]);
 
   return (
     <div className="flex min-h-screen w-full">
@@ -87,6 +93,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           <h2 className="text-lg font-semibold text-foreground">
             {navItems.find(n => n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to))?.label || 'GerFinance'}
           </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto"
+            onClick={() => setDark(d => !d)}
+            aria-label="Alternar tema"
+          >
+            {dark ? <Sun className="h-5 w-5 text-foreground" /> : <Moon className="h-5 w-5 text-foreground" />}
+          </Button>
         </header>
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           {children}
