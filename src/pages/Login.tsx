@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -142,7 +142,7 @@ const Login = () => {
 
         <Card className="shadow-lg border-border/50">
           {twoFactorPending ? (
-            <>
+            <Fragment key="2fa">
               <CardHeader className="text-center pb-2">
                 <div className="flex items-center justify-center gap-2 text-xl font-semibold">
                   <ShieldCheck className="h-5 w-5" />
@@ -187,9 +187,9 @@ const Login = () => {
                   </form>
                 </Form>
               </CardContent>
-            </>
+            </Fragment>
           ) : mode === 'login' ? (
-            <>
+            <Fragment key="login">
               <CardHeader className="text-center pb-2">
                 <h2 className="text-xl font-semibold">Entrar na sua conta</h2>
                 <p className="text-sm text-muted-foreground">Use seu e-mail e senha cadastrados</p>
@@ -241,9 +241,9 @@ const Login = () => {
                   </button>
                 </p>
               </CardContent>
-            </>
+            </Fragment>
           ) : (
-            <>
+            <Fragment key="register">
               <CardHeader className="text-center pb-2">
                 <h2 className="text-xl font-semibold">Criar sua conta</h2>
                 <p className="text-sm text-muted-foreground">Senha com no mínimo 8 caracteres</p>
@@ -295,7 +295,7 @@ const Login = () => {
                   </button>
                 </p>
               </CardContent>
-            </>
+            </Fragment>
           )}
         </Card>
       </div>
