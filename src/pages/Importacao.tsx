@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { Transaction } from '@/types/finance';
+import { parseImportRows } from '@/lib/import-parser';
 
 const Importacao = () => {
   const { importTransactions, categories, paymentMethods } = useFinance();
@@ -20,7 +20,7 @@ const Importacao = () => {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
       if (rows.length === 0) {
         toast.error('Planilha vazia');
@@ -28,14 +28,7 @@ const Importacao = () => {
         return;
       }
 
-      const items: Omit<Transaction, 'id'>[] = rows.map(row => ({
-        date: row['data'] || row['Data'] || row['date'] || new Date().toISOString().split('T')[0],
-        description: row['descricao'] || row['Descrição'] || row['description'] || 'Importado',
-        amount: Math.abs(parseFloat(row['valor'] || row['Valor'] || row['amount'] || 0)),
-        type: (parseFloat(row['valor'] || row['Valor'] || row['amount'] || 0) >= 0 ? 'income' : 'expense') as 'income' | 'expense',
-        categoryId: categories[0]?.id || '',
-        paymentMethodId: paymentMethods[0]?.id || '',
-      }));
+      const items = parseImportRows(rows, categories[0]?.id || '', paymentMethods[0]?.id || '');
 
       // Simulate delay
       await new Promise(r => setTimeout(r, 1000));
