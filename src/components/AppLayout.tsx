@@ -70,7 +70,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
         <div className="px-3 py-4 border-t border-sidebar-border">
           <div className="px-3 mb-3">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name}</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.email?.split('@')[0]}</p>
             <p className="text-xs text-sidebar-muted truncate">{user?.email}</p>
           </div>
           <Button

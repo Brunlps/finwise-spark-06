@@ -21,6 +21,5 @@ export interface PaymentMethod {
 
 export interface User {
   id: string;
-  name: string;
   email: string;
 }
