@@ -1,5 +1,10 @@
-import { useFinance } from '@/contexts/FinanceContext';
+import { useAccounts } from '@/hooks/use-accounts';
+import { useCategories } from '@/hooks/use-categories';
+import { useTransactions } from '@/hooks/use-transactions';
+import { calculateTotals, groupExpensesByCategory, sumAccountBalances } from '@/lib/finance-calculations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TrendingUp, TrendingDown, Wallet, PieChart as PieIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useMemo } from 'react';
@@ -8,20 +13,49 @@ const formatCurrency = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const Dashboard = () => {
-  const { balance, totalIncome, totalExpenses, transactions, categories } = useFinance();
+  const accountsQuery = useAccounts();
+  const categoriesQuery = useCategories();
+  const transactionsQuery = useTransactions();
 
-  const expensesByCategory = useMemo(() => {
-    const map: Record<string, number> = {};
-    transactions.filter(t => t.type === 'expense').forEach(t => {
-      map[t.categoryId] = (map[t.categoryId] || 0) + t.amount;
-    });
-    return Object.entries(map).map(([catId, value]) => {
-      const cat = categories.find(c => c.id === catId);
-      return { name: cat?.name || 'Outro', value, color: cat?.color || '#94a3b8' };
-    }).sort((a, b) => b.value - a.value);
-  }, [transactions, categories]);
+  const isLoading = accountsQuery.isLoading || categoriesQuery.isLoading || transactionsQuery.isLoading;
+  const isError = accountsQuery.isError || categoriesQuery.isError || transactionsQuery.isError;
 
-  const recentTransactions = transactions.slice(0, 5);
+  const accountsData = accountsQuery.data;
+  const categoriesData = categoriesQuery.data;
+  const transactionsData = transactionsQuery.data;
+
+  const balance = useMemo(() => sumAccountBalances(accountsData ?? []), [accountsData]);
+  const { totalIncome, totalExpenses } = useMemo(() => calculateTotals(transactionsData ?? []), [transactionsData]);
+  const expensesByCategory = useMemo(
+    () => groupExpensesByCategory(transactionsData ?? [], categoriesData ?? []),
+    [transactionsData, categoriesData],
+  );
+  const categories = categoriesData ?? [];
+  const recentTransactions = (transactionsData ?? []).slice(0, 5);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-72 w-full rounded-xl" />
+          <Skeleton className="h-72 w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>Não foi possível carregar os dados financeiros. Tente novamente em instantes.</AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -121,7 +155,7 @@ const Dashboard = () => {
                   <div key={t.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat?.color + '20' }}>
-                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: cat?.color }} />
+                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: cat?.color ?? '#94a3b8' }} />
                       </div>
                       <div>
                         <p className="text-sm font-medium">{t.description}</p>
@@ -134,6 +168,9 @@ const Dashboard = () => {
                   </div>
                 );
               })}
+              {recentTransactions.length === 0 && (
+                <p className="text-muted-foreground text-sm py-8 text-center">Nenhuma transação registrada</p>
+              )}
             </div>
           </CardContent>
         </Card>

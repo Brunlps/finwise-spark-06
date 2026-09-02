@@ -4,19 +4,26 @@ export interface Transaction {
   description: string;
   amount: number;
   type: 'income' | 'expense';
-  categoryId: string;
-  paymentMethodId: string;
+  categoryId: string | null;
+  accountId: string;
 }
+
+export type CategoryType = 'income' | 'expense';
 
 export interface Category {
   id: string;
   name: string;
-  color: string;
+  type: CategoryType;
+  icon: string | null;
+  color: string | null;
 }
 
-export interface PaymentMethod {
+export interface Account {
   id: string;
   name: string;
+  balance: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface User {

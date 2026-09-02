@@ -1,62 +1,124 @@
 import { useState } from 'react';
-import { useFinance } from '@/contexts/FinanceContext';
+import { useAccounts, useCreateAccount, useDeleteAccount, useUpdateAccount } from '@/hooks/use-accounts';
+import { useCategories, useCreateCategory, useDeleteCategory, useUpdateCategory } from '@/hooks/use-categories';
+import { Category, CategoryType } from '@/types/finance';
+import { ApiError } from '@/lib/api/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Tag, CreditCard } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Plus, Pencil, Trash2, Tag, Wallet, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TwoFactorSettings from '@/components/TwoFactorSettings';
+
+const formatCurrency = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+const describeError = (error: unknown, fallback: string): string => (error instanceof ApiError ? error.detail : fallback);
 
 const Configuracoes = () => {
-  const { categories, paymentMethods, addCategory, updateCategory, deleteCategory, addPaymentMethod, updatePaymentMethod, deletePaymentMethod } = useFinance();
+  const { data: categories = [], isLoading: loadingCategories } = useCategories();
+  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
+
+  const { data: accounts = [], isLoading: loadingAccounts } = useAccounts();
+  const createAccount = useCreateAccount();
+  const updateAccount = useUpdateAccount();
+  const deleteAccount = useDeleteAccount();
 
   // Category state
   const [catModal, setCatModal] = useState(false);
-  const [editingCat, setEditingCat] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [catName, setCatName] = useState('');
+  const [catType, setCatType] = useState<CategoryType>('expense');
   const [catColor, setCatColor] = useState('#3b82f6');
   const [deleteCatId, setDeleteCatId] = useState<string | null>(null);
+  const [savingCat, setSavingCat] = useState(false);
 
-  // Payment method state
-  const [pmModal, setPmModal] = useState(false);
-  const [editingPm, setEditingPm] = useState<{ id: string; name: string } | null>(null);
-  const [pmName, setPmName] = useState('');
-  const [deletePmId, setDeletePmId] = useState<string | null>(null);
+  // Account state
+  const [accModal, setAccModal] = useState(false);
+  const [editingAcc, setEditingAcc] = useState<{ id: string; name: string } | null>(null);
+  const [accName, setAccName] = useState('');
+  const [accBalance, setAccBalance] = useState('0.00');
+  const [deleteAccId, setDeleteAccId] = useState<string | null>(null);
+  const [savingAcc, setSavingAcc] = useState(false);
 
-  const openNewCat = () => { setEditingCat(null); setCatName(''); setCatColor('#3b82f6'); setCatModal(true); };
-  const openEditCat = (c: { id: string; name: string; color: string }) => { setEditingCat(c); setCatName(c.name); setCatColor(c.color); setCatModal(true); };
-  const saveCat = () => {
+  const openNewCat = () => { setEditingCat(null); setCatName(''); setCatType('expense'); setCatColor('#3b82f6'); setCatModal(true); };
+  const openEditCat = (c: Category) => { setEditingCat(c); setCatName(c.name); setCatType(c.type); setCatColor(c.color ?? '#3b82f6'); setCatModal(true); };
+  const saveCat = async () => {
     if (!catName.trim()) { toast.error('Nome obrigatório'); return; }
-    if (editingCat) { updateCategory({ ...editingCat, name: catName, color: catColor }); toast.success('Categoria atualizada'); }
-    else { addCategory({ name: catName, color: catColor }); toast.success('Categoria criada'); }
-    setCatModal(false);
+    setSavingCat(true);
+    try {
+      if (editingCat) {
+        await updateCategory.mutateAsync({ id: editingCat.id, name: catName, color: catColor });
+        toast.success('Categoria atualizada');
+      } else {
+        await createCategory.mutateAsync({ name: catName, type: catType, color: catColor, icon: null });
+        toast.success('Categoria criada');
+      }
+      setCatModal(false);
+    } catch (error) {
+      toast.error(describeError(error, 'Não foi possível salvar a categoria'));
+    } finally {
+      setSavingCat(false);
+    }
   };
-  const confirmDeleteCat = () => {
-    if (deleteCatId) {
-      const ok = deleteCategory(deleteCatId);
-      if (ok) toast.success('Categoria excluída');
-      else toast.error('Categoria em uso, não pode ser removida');
+  const confirmDeleteCat = async () => {
+    if (!deleteCatId) return;
+    try {
+      await deleteCategory.mutateAsync(deleteCatId);
+      toast.success('Categoria excluída');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error('Categoria em uso em transações, não pode ser removida');
+      } else {
+        toast.error(describeError(error, 'Não foi possível excluir a categoria'));
+      }
+    } finally {
       setDeleteCatId(null);
     }
   };
 
-  const openNewPm = () => { setEditingPm(null); setPmName(''); setPmModal(true); };
-  const openEditPm = (p: { id: string; name: string }) => { setEditingPm(p); setPmName(p.name); setPmModal(true); };
-  const savePm = () => {
-    if (!pmName.trim()) { toast.error('Nome obrigatório'); return; }
-    if (editingPm) { updatePaymentMethod({ ...editingPm, name: pmName }); toast.success('Forma de pagamento atualizada'); }
-    else { addPaymentMethod({ name: pmName }); toast.success('Forma de pagamento criada'); }
-    setPmModal(false);
+  const openNewAcc = () => { setEditingAcc(null); setAccName(''); setAccBalance('0.00'); setAccModal(true); };
+  const openEditAcc = (a: { id: string; name: string }) => { setEditingAcc(a); setAccName(a.name); setAccModal(true); };
+  const saveAcc = async () => {
+    if (!accName.trim()) { toast.error('Nome obrigatório'); return; }
+    setSavingAcc(true);
+    try {
+      if (editingAcc) {
+        await updateAccount.mutateAsync({ id: editingAcc.id, name: accName });
+        toast.success('Conta atualizada');
+      } else {
+        const parsedBalance = parseFloat(accBalance.replace(',', '.'));
+        await createAccount.mutateAsync({ name: accName, balance: Number.isFinite(parsedBalance) ? parsedBalance : 0 });
+        toast.success('Conta criada');
+      }
+      setAccModal(false);
+    } catch (error) {
+      toast.error(describeError(error, 'Não foi possível salvar a conta'));
+    } finally {
+      setSavingAcc(false);
+    }
   };
-  const confirmDeletePm = () => {
-    if (deletePmId) {
-      const ok = deletePaymentMethod(deletePmId);
-      if (ok) toast.success('Forma de pagamento excluída');
-      else toast.error('Forma de pagamento em uso, não pode ser removida');
-      setDeletePmId(null);
+  const confirmDeleteAcc = async () => {
+    if (!deleteAccId) return;
+    try {
+      await deleteAccount.mutateAsync(deleteAccId);
+      toast.success('Conta excluída');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error('Conta possui transações vinculadas, não pode ser removida');
+      } else {
+        toast.error(describeError(error, 'Não foi possível excluir a conta'));
+      }
+    } finally {
+      setDeleteAccId(null);
     }
   };
 
@@ -67,7 +129,8 @@ const Configuracoes = () => {
       <Tabs defaultValue="categories">
         <TabsList>
           <TabsTrigger value="categories"><Tag className="mr-2 h-4 w-4" />Categorias</TabsTrigger>
-          <TabsTrigger value="payments"><CreditCard className="mr-2 h-4 w-4" />Formas de Pagamento</TabsTrigger>
+          <TabsTrigger value="accounts"><Wallet className="mr-2 h-4 w-4" />Contas</TabsTrigger>
+          <TabsTrigger value="security"><ShieldCheck className="mr-2 h-4 w-4" />Segurança</TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories" className="mt-4">
@@ -77,47 +140,63 @@ const Configuracoes = () => {
               <Button size="sm" onClick={openNewCat}><Plus className="mr-2 h-4 w-4" />Nova</Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {categories.map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded-full border-2 border-border" style={{ backgroundColor: c.color }} />
-                      <span className="font-medium text-sm">{c.name}</span>
+              {loadingCategories ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <div className="space-y-2">
+                  {categories.map(c => (
+                    <div key={c.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-5 rounded-full border-2 border-border" style={{ backgroundColor: c.color ?? '#94a3b8' }} />
+                        <span className="font-medium text-sm">{c.name}</span>
+                        <span className="text-xs text-muted-foreground">{c.type === 'income' ? 'Receita' : 'Despesa'}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCat(c)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteCatId(c.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCat(c)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteCatId(c.id)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                  {categories.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Nenhuma categoria cadastrada</p>}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="payments" className="mt-4">
+        <TabsContent value="accounts" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base">Formas de Pagamento</CardTitle>
-              <Button size="sm" onClick={openNewPm}><Plus className="mr-2 h-4 w-4" />Nova</Button>
+              <CardTitle className="text-base">Contas</CardTitle>
+              <Button size="sm" onClick={openNewAcc}><Plus className="mr-2 h-4 w-4" />Nova</Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {paymentMethods.map(p => (
-                  <div key={p.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{p.name}</span>
+              {loadingAccounts ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <div className="space-y-2">
+                  {accounts.map(a => (
+                    <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <Wallet className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium text-sm">{a.name}</span>
+                        <span className={`text-xs ${a.balance >= 0 ? 'text-income' : 'text-expense'}`}>{formatCurrency(a.balance)}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditAcc(a)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteAccId(a.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditPm(p)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeletePmId(p.id)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                  {accounts.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Nenhuma conta cadastrada</p>}
+                </div>
+              )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-4">
+          <TwoFactorSettings />
         </TabsContent>
       </Tabs>
 
@@ -127,20 +206,44 @@ const Configuracoes = () => {
           <DialogHeader><DialogTitle>{editingCat ? 'Editar' : 'Nova'} Categoria</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label>Nome</Label><Input value={catName} onChange={e => setCatName(e.target.value)} placeholder="Ex: Alimentação" /></div>
+            <div>
+              <Label>Tipo</Label>
+              <Select value={catType} onValueChange={(v: CategoryType) => setCatType(v)} disabled={!!editingCat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Despesa</SelectItem>
+                  <SelectItem value="income">Receita</SelectItem>
+                </SelectContent>
+              </Select>
+              {editingCat && <p className="text-xs text-muted-foreground mt-1">O tipo não pode ser alterado após criada.</p>}
+            </div>
             <div><Label>Cor</Label><div className="flex gap-2 items-center"><Input type="color" value={catColor} onChange={e => setCatColor(e.target.value)} className="w-16 h-10 p-1" /><span className="text-sm text-muted-foreground">{catColor}</span></div></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setCatModal(false)}>Cancelar</Button><Button onClick={saveCat}>Salvar</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCatModal(false)}>Cancelar</Button>
+            <Button onClick={saveCat} disabled={savingCat}>{savingCat && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Payment Method Modal */}
-      <Dialog open={pmModal} onOpenChange={setPmModal}>
+      {/* Account Modal */}
+      <Dialog open={accModal} onOpenChange={setAccModal}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingPm ? 'Editar' : 'Nova'} Forma de Pagamento</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAcc ? 'Editar' : 'Nova'} Conta</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div><Label>Nome</Label><Input value={pmName} onChange={e => setPmName(e.target.value)} placeholder="Ex: PIX" /></div>
+            <div><Label>Nome</Label><Input value={accName} onChange={e => setAccName(e.target.value)} placeholder="Ex: Carteira" /></div>
+            {!editingAcc && (
+              <div>
+                <Label>Saldo inicial (R$)</Label>
+                <Input type="number" step="0.01" value={accBalance} onChange={e => setAccBalance(e.target.value)} />
+              </div>
+            )}
+            {editingAcc && <p className="text-xs text-muted-foreground">O saldo é calculado a partir das transações e não pode ser editado diretamente.</p>}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setPmModal(false)}>Cancelar</Button><Button onClick={savePm}>Salvar</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccModal(false)}>Cancelar</Button>
+            <Button onClick={saveAcc} disabled={savingAcc}>{savingAcc && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -152,10 +255,10 @@ const Configuracoes = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={!!deletePmId} onOpenChange={() => setDeletePmId(null)}>
+      <AlertDialog open={!!deleteAccId} onOpenChange={() => setDeleteAccId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Excluir forma de pagamento?</AlertDialogTitle><AlertDialogDescription>Formas de pagamento vinculadas a transações não podem ser removidas.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={confirmDeletePm} className="bg-destructive text-destructive-foreground">Excluir</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Excluir conta?</AlertDialogTitle><AlertDialogDescription>Contas vinculadas a transações não podem ser removidas.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteAcc} className="bg-destructive text-destructive-foreground">Excluir</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

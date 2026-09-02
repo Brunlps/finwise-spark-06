@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { FinanceProvider } from "@/contexts/FinanceContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import Login from "@/pages/Login";
@@ -15,7 +14,14 @@ import Configuracoes from "@/pages/Configuracoes";
 import Relatorios from "@/pages/Relatorios";
 import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    // Dados reais podem falhar (rede, 401/403/404/409) — diferente do mock, que nunca
+    // errava. Uma tentativa a mais é suficiente; a mensagem de erro fica a cargo de cada
+    // tela via ApiError.
+    queries: { retry: 1, refetchOnWindowFocus: false },
+  },
+});
 
 const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -42,11 +48,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <FinanceProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </FinanceProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

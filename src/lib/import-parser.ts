@@ -5,7 +5,7 @@ export type ImportedRow = Record<string, unknown>;
 export function parseImportRows(
   rows: ImportedRow[],
   defaultCategoryId: string,
-  defaultPaymentMethodId: string,
+  defaultAccountId: string,
 ): Omit<Transaction, 'id'>[] {
   return rows.map(row => {
     const rawDate = row['data'] || row['Data'] || row['date'] || new Date().toISOString().split('T')[0];
@@ -19,7 +19,7 @@ export function parseImportRows(
       amount: Math.abs(amount),
       type: (amount >= 0 ? 'income' : 'expense') as 'income' | 'expense',
       categoryId: defaultCategoryId,
-      paymentMethodId: defaultPaymentMethodId,
+      accountId: defaultAccountId,
     };
   });
 }

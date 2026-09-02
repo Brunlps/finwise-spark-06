@@ -43,3 +43,13 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// jsdom não implementa ResizeObserver; o componente InputOTP (usado em Login e nas
+// telas de 2FA) usa um internamente para medir o container.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, "ResizeObserver", { writable: true, value: ResizeObserverStub });
+Object.defineProperty(globalThis, "ResizeObserver", { writable: true, value: ResizeObserverStub });
