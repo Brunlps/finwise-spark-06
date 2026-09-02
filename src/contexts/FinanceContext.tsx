@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { Transaction, Category, PaymentMethod } from '@/types/finance';
 import { defaultTransactions, defaultCategories, defaultPaymentMethods } from '@/data/mock-data';
+import { calculateTotals } from '@/lib/finance-calculations';
 
 interface FinanceContextType {
   transactions: Transaction[];
@@ -37,9 +38,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [categories, setCategories] = useState<Category[]>(defaultCategories);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(defaultPaymentMethods);
 
-  const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [transactions]);
-  const totalExpenses = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [transactions]);
-  const balance = totalIncome - totalExpenses;
+  const { totalIncome, totalExpenses, balance } = useMemo(() => calculateTotals(transactions), [transactions]);
 
   const addTransaction = useCallback((t: Omit<Transaction, 'id'>) => {
     setTransactions(prev => [{ ...t, id: genId('t') }, ...prev]);
